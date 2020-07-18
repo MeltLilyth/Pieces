@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yuri.TestSpringBoot.Dao.UserMapper">
+    <!-- 根据userId查询用户信息   -->
+    <select id="findUseById" resultType="com.yuri.TestSpringBoot.Entity.User">
+        select * from t_user where userId = #{userId}
+    </select>
+
+    <!-- 查询表中所有的用户信息   -->
+    <select id="findAllUsers" resultType="com.yuri.TestSpringBoot.Entity.User">
+        select * from t_user
+    </select>
+
+    <!-- 添加新的用户信息   -->
+    <sql id="columns">
+        <trim suffixOverrides=",">
+            databaseId,
+            <if test="#{user.m_userId} != null">userId,</if>
+            <if test="#{user.m_username} != null">username,</if>
+            <if test="#{user.m_password} != null">password,</if>
+        </trim>
+    </sql>
+
+    <sql id="values">
+        <trim suffixOverrides=",">
+            databaseId,
+            <if test="#{user.m_userId} != null">#{user.m_userId},</if>
+            <if test="#{user.m_username} != null">#{user.m_username},</if>
+            <if test="#{user.m_password} != null">#{user.m_password},</if>
+        </trim>
+    </sql>
+
+    <insert id="addNewUser">
+        insert into t_user (<include refid="columns"/>) values i<include refid="values"/>)
+    </insert>
+
+    <!-- 更新用户信息  -->
+    <update id="updateUserMessage">
+        update t_user
+        <set>
+            <if test="#{user.m_username} != null">username = #{user.m_username}</if>
+            <if test="#{user.m_password} != null">password = #{user.m_password}</if>
+        </set>
+        where userId = #{user.m_userId}
+    </update>
+
+    <!-- 删除用户信息  -->
+    <delete id="deleteUser">
+        delete from t_user where userId = #{userId}
+    </delete>
+</mapper>
