@@ -63,7 +63,9 @@ class ReflectionFactory{
             }
         }
     }
-
+    
+    //后续想一想这个方法在正式项目中应该是static的，避免过多的类调用单例产生大量的对象从而产生GC....
+    //不过在自己写的练习里面....随便了
     public Object GetBean(String beanName){
         return objectMap.get(beanName);
     }
