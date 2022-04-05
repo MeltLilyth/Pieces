@@ -1,1 +1,133 @@
+package com.yuri.controller.core.codex;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+
+/**
+ * @version:defaultVersion
+ * @author：冷笑の游里
+ * @date: 2022/4/4 10:54
+ */
+public class BitConvert {
+
+    /*varint编码类型标识*/
+    public final static int EncodingType_Varint = 0;
+    /*TLV编码类型标识*/
+    public final static int EncodingType_TLV = 1;
+    /*32位编码类型标识*/
+    public final static int EncodingType_32Bit = 2;
+    /*64位编码类型标识*/
+    public final static int EncodingType_64Bit = 3;
+    /*传入string数据时规定的value长度大小*/
+    public final static int FormatStringValLength = 24;
+
+    //加密int类型数据编码
+    public static byte[] EncodingInt32Val(int value) throws IOException {
+        value = EncodingZigZag32(value);
+        byte[] bytes = EncodingVarints64(value),tagBytes = EncodingVarints64(EncodingType_Varint),encodingBytes = new byte[bytes.length + tagBytes.length];
+        System.arraycopy(tagBytes, 0, encodingBytes, 0, tagBytes.length);
+        System.arraycopy(bytes, 0, encodingBytes, tagBytes.length, bytes.length);
+        return encodingBytes;
+    }
+
+    //解密int类型数据编码
+    public static int DecodingInt32Val(byte[] bytes)throws IOException{
+        int value = (int)DecodingVarints64(new ByteArrayInputStream(bytes));
+        return DecodingZigZag32(value);
+    }
+
+    //加密编码long类型数据
+    public static byte[] EncodingInt64Val(long value) throws IOException {
+        value = EncodingZigZag64(value);
+        return EncodingVarints64(value);
+    }
+
+    //解密long类型数据编码
+    public static long DecodingInt64Val(byte[] bytes) throws IOException {
+        long value = DecodingVarints64(new ByteArrayInputStream(bytes));
+        return DecodingZigZag64(value);
+    }
+
+    //加密编码string类型数据 -- 使用Tag_Length_Value编码格式
+    public static byte[] EncodingStringVal(String tagVal,String value)throws IOException{
+        byte[] tagBytes = EncodingTagVal(EncodingType_TLV, tagVal, true),strVal = value.getBytes(StandardCharsets.UTF_8),strLen = EncodingVarints64(strVal.length);
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        byteArrayOutputStream.write(tagBytes, 0, tagBytes.length);
+        byteArrayOutputStream.write(strLen, 0, strLen.length);
+        byteArrayOutputStream.write(strVal, 0, strVal.length);
+
+        byte[] strEncodingResult = byteArrayOutputStream.toByteArray();
+        byteArrayOutputStream.close();
+        return strEncodingResult;
+    }
+
+    //加密Tag标识
+    public static byte[] EncodingTagVal(int tag, String tagVal, boolean isPrototype) throws IOException {
+        if(tagVal == null || tagVal.isEmpty()){ throw new NullPointerException(); }
+        if(tagVal.length() >= FormatStringValLength){ throw new ArrayIndexOutOfBoundsException(); }
+
+        byte[] bitConvert_Tag = EncodingVarints64(tag),param_Tag = tagVal.getBytes(StandardCharsets.UTF_8),
+        encodingResult = new byte [(param_Tag.length <= 2 ? 1 : param_Tag.length <= 9 ? 2 : param_Tag.length <= 15? 3 : 4) * 8],
+        encodingResultLen = EncodingVarints64(encodingResult.length);
+        // 2 + 2 + 1 + 24 + 3
+        int index = 0;
+        System.arraycopy(encodingResultLen,0, encodingResult, 0, encodingResultLen.length);
+        System.arraycopy(bitConvert_Tag,0, encodingResult, encodingResultLen.length, bitConvert_Tag.length);
+        index += (encodingResultLen.length + bitConvert_Tag.length);
+        encodingResult[index ++] = isPrototype? 0 : (byte) 1;
+
+        int paramIndex = 0;
+        for(int i = index; i < encodingResult.length; i ++){
+            if(encodingResult.length % i == 1){ encodingResult[i] = paramIndex < bitConvert_Tag.length && i < encodingResult.length - 1? (byte)1 : 0; continue; }
+            encodingResult[i] = paramIndex < param_Tag.length? param_Tag[paramIndex] : 0;
+            paramIndex ++;
+        }
+
+        return encodingResult;
+    }
+
+    /*varints编码*/
+    /*summary: 选择0x7F进行编码是因为ASCII表中定义了128位code, 范围取值位 0 ~ 127*/
+    private static byte[] EncodingVarints64(long value) throws IOException {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        while(true){
+            if((value & ~0x7f) == 0){
+                byteArrayOutputStream.write((byte)value);
+                break;
+            }
+            else{
+                byteArrayOutputStream.write((byte)((value & 0x7F) | 0x80));
+                value >>>= 7;
+            }
+        }
+        byte[] bytes = byteArrayOutputStream.toByteArray();
+        byteArrayOutputStream.close();
+        return bytes;
+    }
+
+    private static long DecodingVarints64(ByteArrayInputStream byteArrayInputStream) throws IOException {
+        long value = 0, i = 0;
+        while(true){
+            int x = byteArrayInputStream.read(), v = x & 0x7f, msb = x & 0x80;
+            value |= (long)v << (7 * i);
+            i ++;
+            if(msb == 0){ break; }
+        }
+        byteArrayInputStream.close();
+        return value;
+    }
+
+    /*ZigZag编码*/
+    /*summary: 负数用ZigZag编码永远是奇数，正数用ZigZag编码永远是偶数，0用ZigZag编码永远是0*/
+    private static int EncodingZigZag32(int value){ return value << 1 ^ value >> 31; }
+
+    private static int DecodingZigZag32(int value){ return value % 2 == 0? value >> 1 : ~(value >> 1); }
+
+    private static long EncodingZigZag64(long value){ return value << 1 ^ value >> 63; }
+
+    private static long DecodingZigZag64(long value){ return value % 2 == 0? value >> 1 : ~(value >> 1); }
+}
